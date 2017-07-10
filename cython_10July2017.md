@@ -10,6 +10,11 @@ Cython is better for iterative code. Numpy better for vectorized code.
 
 Cython is basically a translator between Python and C.
 
+If coding outside of the notebook, instead of %%cython magic, you compile a whole 'pyx' file with cython.
+
+	cython -a example.pyx
+
+
 ## 00-Intro
 
 Cython good for heavy numerial computing.
@@ -86,7 +91,7 @@ Cython supports three kinds of functions:
 
 `cdef` variables/functions are not visible to Python outside defining scope. 
 
-`cpdef` functions are two functions in one. They are just like `cdef` functions with an implicitly defined Python wrapper for free. 
+`cpdef` functions are two functions in one. They are just like `cdef` functions with an implicitly defined Python wrapper for free. You cannot use C-only types here.
 
 To get helpful error messages from `cdef` and `cpdef` functions:
 
@@ -97,4 +102,88 @@ Versus just
 
 	cpdef int unchecked_div(int a, int b):
     	return <int>(a / b)
+
+To raise exceptions with C return types,
+
+	cpdef int func() except -1: 
+    	# ...                   
+    	raise ValueError("...")
+
+We guarantee that -1 is never a valid return, so Cython uses it as a sentinal to flag that an exception has occurred. 
+
+## 05-Profiling-and-Performance
+
+With magic `%%prun` can display what time was spent in each function.
+
+But notice that profiling is run in Python, so actual time of the Cython code is not what is shown. But profiling is useful to see which functions are causing slowdowns.
+
+Includes overhead.
+
+	cython file.pyx -a 
+
+Will generate an html representation of the Cython optimizations. 
+
+	Yellow == slow
+
+Often all you need to do is declare types.
+
+Can redefine as cdef or cpdef. Can speficiy the return type (by default, assumes a python object), for example, 
+
+	cdef int func(variable)
+
+## 06-Numpy-Buffers-Fused-Types
+
+`cimport` allows interfacing with other Cython code at the C-level and at compile time. Whereas the regular `import` statement interfaces with other Python modules at runtime.
+
+For example,
+
+	cimport numpy as cnp
+
+We can also cimport C and C++ function from the C and C++ standard (template) libraries.
+
+For example, to access functions in the C stdlib math.h header file,
+
+	from libc.math cimport exp, log, sqrt
+
+## 07-Cythonize-Pandas-GroupBy
+
+Can speed up `Pandas GroupBy` by rewriting with `Numpy` arraus and get further speed ups with Cython.
+
+
+	def splitby(df):
+	    idx = df.index
+    	# NumPy array of "posts" that delineate the row indices
+    	# with which to split the dataframe.
+    	posts = np.where(idx[1:] != idx[:-1])[0] + 1
+    	split_labels = idx[np.concatenate([[0], posts, [-1]])]
+    	split_data = np.split(df.values, posts, 0)
+    	return list(zip(split_labels, split_data))
+
+Versus a Cython version:
+
+	cimport cython
+	cimport numpy as cnp
+	import numpy as np
+
+	def splitby_cython(df):
+    	cols = df.values
+    	idx = df.index.values
+    	n = idx.shape[0]
+    	result = []
+    	thispost = 0
+        
+    	for i in range(1, n):
+    	    if idx[i] != idx[i-1]:
+    	        result.append((idx[i-1], cols[thispost:i]))
+    	        thispost = i
+            
+    	result.append((idx[i-1], cols[thispost:]))
+    	return result
+
+
+## 08-Extension-Types
+
+Can declare types of *instance* attribues at compile-time.
+
+
 
